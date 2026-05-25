@@ -1,0 +1,57 @@
+[
+  {
+    "id": "tc_numeric_accuracy_1",
+    "description": "Calculate simple sum of sales amounts",
+    "question": "What is the total sales amount in the sales dataset?",
+    "expected_type": "text",
+    "expected_value": 1200.0,
+    "tolerance": 0.01,
+    "expected_chart_type": null,
+    "expected_behaviour": "return_value",
+    "category": "accuracy"
+  },
+  {
+    "id": "tc_relationship_join_2",
+    "description": "Query requiring automatic foreign key join between sales and regions",
+    "question": "What is the total sales amount in the North region?",
+    "expected_type": "text",
+    "expected_value": 500.0,
+    "tolerance": 0.01,
+    "expected_chart_type": null,
+    "expected_behaviour": "return_value",
+    "category": "accuracy"
+  },
+  {
+    "id": "tc_hallucination_prevention_3",
+    "description": "Ensure model admits no data when querying column that does not exist",
+    "question": "What is the total discount amount given to customers?",
+    "expected_type": "text",
+    "expected_value": null,
+    "tolerance": 0.0,
+    "expected_chart_type": null,
+    "expected_behaviour": "admit_no_data",
+    "category": "hallucination"
+  },
+  {
+    "id": "tc_chart_generation_4",
+    "description": "Ensure Plotly chart is correctly returned and executed",
+    "question": "Show me a bar chart of sales by region.",
+    "expected_type": "chart",
+    "expected_value": null,
+    "tolerance": 0.0,
+    "expected_chart_type": "bar",
+    "expected_behaviour": "return_chart",
+    "category": "chart"
+  },
+  {
+    "id": "tc_edge_case_5",
+    "description": "Handle out-of-bounds filter returning empty set",
+    "question": "What is the total sales for R99?",
+    "expected_type": "text",
+    "expected_value": 0.0,
+    "tolerance": 0.01,
+    "expected_chart_type": null,
+    "expected_behaviour": "return_value",
+    "category": "edge_case"
+  }
+]
