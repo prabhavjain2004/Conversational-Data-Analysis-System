@@ -115,7 +115,7 @@ The system consists of two independently deployable services:
 
   ---------- -------------------- -------------------------------------------------------
   Backend    FastAPI (Python)     Data processing, LLM integration, response generation
-  Frontend   Streamlit (Python)   File upload, chat interface, chart rendering
+  Frontend   Next.js (TypeScript) File upload, chat interface, chart rendering
   ---------- -------------------- -------------------------------------------------------
 
 The two services communicate over HTTP. The frontend never talks to the
@@ -157,7 +157,7 @@ Question received\
 └───────────────────────┬─────────────────────────────────┘\
 │ HTTP\
 ┌───────────────────────▼─────────────────────────────────┐\
-│ STREAMLIT FRONTEND │\
+│ NEXT.JS FRONTEND │\
 │ │\
 │ ┌─────────────┐ ┌─────────────┐ ┌─────────────────┐ │\
 │ │ File Upload │ │ Chat UI │ │ Chart Renderer │ │\
@@ -192,7 +192,7 @@ Question received\
 
 docker-compose\
 ├── backend (FastAPI) → port 8000\
-└── frontend (Streamlit) → port 8501
+└── frontend (Next.js) → port 3000
 
 Both containers share a Docker network. The frontend communicates with
 the backend via the internal Docker network hostname, not localhost.
@@ -206,7 +206,7 @@ the backend via the internal Docker network hostname, not localhost.
 -   Defines all API routes
 -   Generates a *request_id* (UUID4) at the entry point of every request
 -   Passes *request_id* to all downstream functions
--   Handles CORS for Streamlit communication
+-   Handles CORS for Next.js communication
 -   Registers global exception handlers
 
 #### *csv_handler.py - *CSV Processing Module
@@ -291,7 +291,7 @@ responses.
 
 ### 6.2 Frontend Components
 
-#### *app.py - *Streamlit Application
+#### Next.js Frontend Application
 
 -   File upload widget (accepts multiple CSVs)
 -   Calls backend */upload* endpoint on file selection
@@ -584,33 +584,27 @@ other system resource.
 environment variable. Switching to a different model requires changing
 one environment variable, not modifying code.
 
-### 8.9 Frontend: Streamlit
+### 8.9 Frontend: Next.js
 
-**Decision:** Use Streamlit for the frontend.
+**Decision:** Use Next.js for the frontend.
 
-**Why Streamlit over plain HTML or other frameworks:**
+**Why Next.js over Streamlit or other frameworks:**
 
--   File upload, chat interface, and Plotly chart rendering are all
-    built-in, zero custom frontend code needed
--   The entire frontend is Python, keeping the codebase in a single
-    language
--   Streamlit\'s session state handles UI state without a separate state
-    management layer
--   Rapid iteration: changes to the UI take seconds to reflect
+-   Provides a modern, production-ready, highly customisable user interface.
+-   Enables robust client-side state management and seamless integration with custom charting libraries (e.g., Plotly.js or react-plotly.js).
+-   Supports dynamic rendering, excellent performance, and a premium user experience with custom components and styles.
+-   Provides a scalable architecture that can easily integrate user authentication and persistent sessions in future phases.
 
-**Why not plain HTML with JavaScript:** Would require writing a file
-upload handler, a WebSocket or polling mechanism for responses, a chart
-rendering library integration, and custom CSS. This adds significant
-frontend work with no benefit for a demo or PoC.
+**Why not Streamlit:** Streamlit restricts UI customisation, does not support modern design languages easily, has limited client-side state management, and is not suitable for a production-ready premium frontend application.
 
 ## 9. Technology Stack
 
   -------------------- --------------------------------- --------------- --------------------------------------------------------------------------
   Backend framework    FastAPI                           Latest stable   Async support, automatic OpenAPI docs, Pydantic integration, type safety
-  Frontend framework   Streamlit                         Latest stable   Built-in file upload, chat UI, Plotly support; pure Python
+  Frontend framework   Next.js                           Latest stable   Modern UI, file upload, chat interface, dynamic React-based components
   Data processing      Pandas                            Latest stable   Industry standard for CSV manipulation; what the LLM generates code for
   LLM                  Gemini 3.0 Flash                  Current         Large context window, strong code gen, cost-efficient
-  Visualisation        Plotly Express                    Latest stable   Interactive charts; works natively in Streamlit; what the LLM generates
+  Visualisation        Plotly Express                    Latest stable   Interactive charts; serialised on backend, rendered in frontend using Plotly.js
   Schema validation    Pydantic v2                       Latest stable   Type-safe request/response models; used by FastAPI natively
   Configuration        pydantic-settings                 Latest stable   Environment variable loading with type validation
   Containerisation     Docker + Compose                  Latest stable   Reproducible, single-command deployment
@@ -1100,7 +1094,7 @@ parsing\
 │ └── exceptions.py \# Custom exception hierarchy\
 │\
 ├── frontend/\
-│ └── app.py \# Streamlit UI\
+│ └── src/ \# Next.js app directory, pages, and components\
 │\
 ├── evals/\
 │ ├── ground_truth.json \# Curated test cases\
@@ -1135,8 +1129,8 @@ CONVERSATION_WINDOW_SIZE=5\
 LOG_LEVEL=INFO\
 \
 \# Frontend\
-BACKEND_URL=http://backend:8000\
-FRONTEND_PORT=8501
+NEXT_PUBLIC_BACKEND_URL=http://backend:8000\
+FRONTEND_PORT=3000
 
 ## 19. Deployment
 
@@ -1174,7 +1168,7 @@ build:\
 context: .\
 dockerfile: Dockerfile.frontend\
 ports:\
- - \"8501:8501\"\
+ - \"3000:3000\"\
 env_file: .env\
 depends_on:\
  - backend
@@ -1217,7 +1211,7 @@ executes, and the correct response type is returned.
 
 -   Sliding window memory implementation
 -   Multi-turn conversation support in */query* endpoint
--   Streamlit frontend (file upload, chat UI, chart rendering)
+-   Next.js frontend (file upload, chat UI, chart rendering)
 -   Cleaning report display in UI
 -   Relationship summary display in UI
 -   Human-readable error messages in UI

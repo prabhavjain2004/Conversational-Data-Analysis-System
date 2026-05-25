@@ -1,0 +1,23 @@
+# ─── Web Framework ─────────────────────────────────────
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+python-multipart>=0.0.18
+
+# ─── Data Processing ──────────────────────────────────
+pandas>=2.2.0
+
+# ─── Schema Validation & Configuration ────────────────
+pydantic>=2.10.0
+pydantic-settings>=2.7.0
+
+# ─── LLM Integration ──────────────────────────────────
+google-genai>=1.14.0
+
+# ─── Visualisation ────────────────────────────────────
+plotly>=6.0.0
+
+# ─── HTTP Client ──────────────────────────────────────
+httpx>=0.28.0
+
+# ─── Encoding Detection ──────────────────────────────
+chardet>=5.2.0
