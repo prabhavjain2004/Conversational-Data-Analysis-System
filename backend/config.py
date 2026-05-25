@@ -30,7 +30,7 @@ class Settings(BaseSettings):
 
     # ── LLM ────────────────────────────────────────────────────────────
     gemini_api_key: str = "your_key_here"
-    llm_model: str = "gemini-3.0-flash"
+    llm_model: str = "gemini-2.5-flash"
 
     # ── Backend ────────────────────────────────────────────────────────
     backend_host: str = "0.0.0.0"

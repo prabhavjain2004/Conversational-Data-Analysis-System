@@ -185,7 +185,7 @@ def run_evaluation() -> None:
     report = {
         "run_id": str(uuid.uuid4()),
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "model": "gemini-3.0-flash",
+        "model": "gemini-2.5-flash",
         "summary": metrics,
         "results": eval_results
     }

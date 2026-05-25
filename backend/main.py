@@ -396,13 +396,21 @@ async def query_data(request: Request, body: QueryRequest):
         # LLM generated code for a text answer — execute it
         try:
             result = safe_execute_text(code, dataframes, request_id)
-            # Interpolate the computed result into the answer
-            if answer and "{result}" in answer:
-                answer = answer.replace("{result}", str(result))
-            elif answer:
-                answer = f"{answer}\n\nComputed value: {result}"
+            
+            # Check for zero, null, or empty dataframe/series/collection (Hallucination Guard)
+            is_empty_collection = hasattr(result, '__len__') and len(result) == 0
+            is_numeric_zero = isinstance(result, (int, float)) and result == 0
+            
+            if result is None or is_empty_collection or is_numeric_zero:
+                answer = "The data does not contain any records for the requested period."
             else:
-                answer = str(result)
+                # Interpolate the computed result into the answer
+                if answer and "{result}" in answer:
+                    answer = answer.replace("{result}", str(result))
+                elif answer:
+                    answer = f"{answer}\n\nComputed value: {result}"
+                else:
+                    answer = str(result)
         except CodeExecutionError:
             log_event(
                 "text_code_fallback",

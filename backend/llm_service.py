@@ -65,6 +65,8 @@ Express code and set type to "chart"
 for charts, or "result" for text
 - Available dataframes in scope: {dataframe_variable_names}
 - Available libraries: pandas (as pd), plotly.express (as px)
+- For generated charts, ALWAYS apply a premium, minimalist monochrome/greyscale palette. Avoid colorful blues, greens, or purples. Use neutral shades like white, silver, and varying greys (e.g., color_discrete_sequence=['#ffffff', '#cccccc', '#999999', '#666666']). Customize the Plotly figure to use template='plotly_dark' and set a transparent background if appropriate, ensuring axes labels are highly readable in white or light silver.
+- If the computed result from your Pandas query code is zero, null, or returns an empty dataframe/series, explicitly state in the answer field that no data was found for this query or requested period. Never hallucinate, assume non-zero values, or present $0 as a valid figure without confirming matching records exist in the dataset.
 
 Response schema:
 {{

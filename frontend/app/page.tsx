@@ -231,7 +231,7 @@ export default function Dashboard() {
               className="dropzone"
               onClick={() => fileInputRef.current?.click()}
             >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: "#a78bfa" }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: "#d4d4d4" }}>
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
               </svg>
               <div>
@@ -249,7 +249,7 @@ export default function Dashboard() {
             </div>
             
             {isUploading && (
-              <div className="pulse" style={{ textAlign: "center", color: "#a78bfa", fontSize: "0.85rem" }}>
+              <div className="pulse" style={{ textAlign: "center", color: "#d4d4d4", fontSize: "0.85rem" }}>
                 Analyzing and cleaning files...
               </div>
             )}
@@ -305,7 +305,7 @@ export default function Dashboard() {
                         style={{
                           background: "transparent",
                           border: "none",
-                          color: activeTab === "cleaning" ? "#c084fc" : "rgba(255,255,255,0.4)",
+                          color: activeTab === "cleaning" ? "#ffffff" : "rgba(255,255,255,0.4)",
                           fontSize: "0.75rem",
                           cursor: "pointer",
                           fontWeight: 600
@@ -318,7 +318,7 @@ export default function Dashboard() {
                         style={{
                           background: "transparent",
                           border: "none",
-                          color: activeTab === "schema" ? "#c084fc" : "rgba(255,255,255,0.4)",
+                          color: activeTab === "schema" ? "#ffffff" : "rgba(255,255,255,0.4)",
                           fontSize: "0.75rem",
                           cursor: "pointer",
                           fontWeight: 600
@@ -333,11 +333,11 @@ export default function Dashboard() {
                       <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", fontSize: "0.8rem", color: "rgba(255,255,255,0.7)" }}>
                         <div style={{ display: "flex", justifyContent: "space-between" }}>
                           <span>Nulls Filled:</span>
-                          <span style={{ color: "#a78bfa", fontWeight: 600 }}>{file.cleaning_report.nulls_filled}</span>
+                          <span style={{ color: "#ffffff", fontWeight: 600 }}>{file.cleaning_report.nulls_filled}</span>
                         </div>
                         <div style={{ display: "flex", justifyContent: "space-between" }}>
                           <span>Outliers Flagged (IQR):</span>
-                          <span style={{ color: "#a78bfa", fontWeight: 600 }}>{file.cleaning_report.outliers_flagged}</span>
+                          <span style={{ color: "#ffffff", fontWeight: 600 }}>{file.cleaning_report.outliers_flagged}</span>
                         </div>
                         <div>
                           <p style={{ marginBottom: "0.25rem" }}>String Columns Trimmed:</p>
@@ -385,8 +385,8 @@ export default function Dashboard() {
 
             {/* Detected Joins Section */}
             {relationships.length > 0 && (
-              <div className="glass-panel" style={{ background: "rgba(20, 20, 28, 0.25)" }}>
-                <p style={{ fontSize: "0.8rem", fontWeight: 600, color: "#c084fc", marginBottom: "0.75rem" }}>
+              <div className="glass-panel" style={{ background: "rgba(20, 20, 20, 0.25)" }}>
+                <p style={{ fontSize: "0.8rem", fontWeight: 600, color: "#a3a3a3", marginBottom: "0.75rem" }}>
                   AUTO-DETECTED RELATIONSHIPS
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
@@ -417,79 +417,94 @@ export default function Dashboard() {
       <main className="chat-container">
         
         {/* Chat History Messages */}
-        <div className="chat-messages">
-          {messages.length === 0 ? (
-            <div style={{ 
-              flex: 1, 
-              display: "flex", 
-              flexDirection: "column", 
-              alignItems: "center", 
-              justifyContent: "center",
-              opacity: 0.6,
-              textAlign: "center"
-            }}>
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: "#a78bfa", marginBottom: "1rem" }}>
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-              </svg>
-              <h2 style={{ fontSize: "1.2rem", fontWeight: 600, color: "white", marginBottom: "0.25rem" }}>
-                No active data conversation
-              </h2>
-              <p style={{ fontSize: "0.85rem", color: "rgba(255,255,255,0.45)" }}>
-                Upload one or more CSV files in the sidebar to begin interactive analysis.
-              </p>
-            </div>
-          ) : (
-            messages.map((msg, index) => (
-              <div 
-                key={index} 
-                className={`chat-bubble ${msg.role}`}
-              >
-                {/* Text Response */}
-                <div style={{ whiteSpace: "pre-line" }}>
-                  {msg.content}
-                </div>
-
-                {/* Plotly Chart Response */}
-                {msg.type === "chart" && msg.figure && (
-                  <div style={{ marginTop: "1rem", background: "rgba(0,0,0,0.2)", borderRadius: "0.5rem", padding: "0.5rem", border: "1px solid rgba(255,255,255,0.04)" }}>
-                    <PlotlyRenderer 
-                      figure={msg.figure} 
-                      chartId={`plotly-chart-${index}`} 
-                    />
-                  </div>
-                )}
-
-                {/* Micro Metadata */}
-                {msg.latency_ms !== undefined && (
+        <div className="chat-messages-scroll-area">
+          <div className="chat-messages">
+            {messages.length === 0 ? (
+              <div style={{ 
+                flex: 1, 
+                display: "flex", 
+                flexDirection: "column", 
+                alignItems: "center", 
+                justifyContent: "center",
+                opacity: 0.6,
+                textAlign: "center",
+                paddingTop: "6rem"
+              }}>
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: "#737373", marginBottom: "1rem" }}>
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+                <h2 style={{ fontSize: "1.2rem", fontWeight: 600, color: "white", marginBottom: "0.25rem" }}>
+                  No active data conversation
+                </h2>
+                <p style={{ fontSize: "0.85rem", color: "rgba(255,255,255,0.45)" }}>
+                  Upload one or more CSV files in the sidebar to begin interactive analysis.
+                </p>
+              </div>
+            ) : (
+              messages.map((msg, index) => (
+                <div 
+                  key={index} 
+                  className={`chat-bubble ${msg.role} ${msg.type === "chart" ? "has-chart" : ""}`}
+                >
+                  {/* Premium Badge */}
                   <div style={{ 
-                    marginTop: "0.5rem", 
-                    fontSize: "0.65rem", 
-                    color: "rgba(255,255,255,0.3)", 
-                    textAlign: "right",
-                    fontWeight: 500
+                    fontSize: "0.68rem", 
+                    textTransform: "uppercase", 
+                    letterSpacing: "0.06em", 
+                    color: msg.role === "user" ? "rgba(255, 255, 255, 0.7)" : "rgba(255, 255, 255, 0.6)", 
+                    marginBottom: "0.4rem", 
+                    fontWeight: 700 
                   }}>
-                    Latency: {msg.latency_ms}ms
+                    {msg.role === "user" ? "You" : "CDAS Assistant"}
                   </div>
-                )}
-              </div>
-            ))
-          )}
 
-          {/* Thinking Indicator */}
-          {isQuerying && (
-            <div className="chat-bubble assistant pulse">
-              <div style={{ display: "flex", gap: "0.3rem", alignItems: "center" }}>
-                <div style={{ width: "6px", height: "6px", background: "#8b5cf6", borderRadius: "50%" }}/>
-                <div style={{ width: "6px", height: "6px", background: "#a78bfa", borderRadius: "50%" }}/>
-                <div style={{ width: "6px", height: "6px", background: "#c084fc", borderRadius: "50%" }}/>
-                <span style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.5)", marginLeft: "0.25rem" }}>
-                  Analyzing data...
-                </span>
-              </div>
-            </div>
-          )}
+                  {/* Text Response */}
+                  <div style={{ whiteSpace: "pre-line" }}>
+                    {msg.content}
+                  </div>
 
-          <div ref={chatEndRef} />
+                  {/* Plotly Chart Response */}
+                  {msg.type === "chart" && msg.figure && (
+                    <div style={{ marginTop: "1rem", background: "rgba(0,0,0,0.25)", borderRadius: "0.75rem", padding: "0.5rem", border: "1px solid rgba(255,255,255,0.06)" }}>
+                      <PlotlyRenderer 
+                        figure={msg.figure} 
+                        chartId={`plotly-chart-${index}`} 
+                      />
+                    </div>
+                  )}
+
+                  {/* Micro Metadata */}
+                  {msg.latency_ms !== undefined && (
+                    <div style={{ 
+                      marginTop: "0.5rem", 
+                      fontSize: "0.65rem", 
+                      color: "rgba(255,255,255,0.3)", 
+                      textAlign: "right",
+                      fontWeight: 500
+                    }}>
+                      Latency: {msg.latency_ms}ms
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+
+            {/* Thinking Indicator */}
+            {isQuerying && (
+              <div className="chat-bubble assistant pulse">
+                <div style={{ display: "flex", gap: "0.3rem", alignItems: "center" }}>
+                  <div style={{ width: "6px", height: "6px", background: "#737373", borderRadius: "50%" }}/>
+                  <div style={{ width: "6px", height: "6px", background: "#a3a3a3", borderRadius: "50%" }}/>
+                  <div style={{ width: "6px", height: "6px", background: "#d4d4d4", borderRadius: "50%" }}/>
+                  <span style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.5)", marginLeft: "0.25rem" }}>
+                    Analyzing data...
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <div ref={chatEndRef} />
+          </div>
         </div>
 
         {/* Input Bar Form */}

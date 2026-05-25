@@ -47,6 +47,19 @@ def detect_relationships(
     if len(dataframes) < 2:
         return []
 
+    # Common descriptive or non-key attribute names to ignore for joins (PRD Section 8.4)
+    IGNORED_COLUMNS = {
+        "address", "city", "state", "country", "zipcode", "postal_code", "zip",
+        "name", "first_name", "last_name", "title", "description", "details", "summary",
+        "status", "type", "category", "genre", "tag", "tags",
+        "email", "phone", "website", "url", "fax",
+        "date", "time", "year", "month", "day", "hour", "minute", "second",
+        "created_at", "updated_at", "timestamp", "created", "modified",
+        "rating", "score", "review", "comment", "comments",
+        "amount", "price", "revenue", "cost", "quantity", "count", "value",
+        "notes", "remarks", "text", "message", "subject"
+    }
+
     relationships: List[DetectedRelationship] = []
     file_names = list(dataframes.keys())
 
@@ -58,6 +71,9 @@ def detect_relationships(
         shared_columns = set(df_a.columns) & set(df_b.columns)
 
         for col in shared_columns:
+            if col.lower() in IGNORED_COLUMNS:
+                continue
+
             overlap_ratio = _compute_overlap(df_a[col], df_b[col])
 
             if overlap_ratio >= threshold:
