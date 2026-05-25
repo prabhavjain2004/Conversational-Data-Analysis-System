@@ -67,6 +67,8 @@ for charts, or "result" for text
 - Available libraries: pandas (as pd), plotly.express (as px)
 - For generated charts, ALWAYS apply a premium, minimalist monochrome/greyscale palette. Avoid colorful blues, greens, or purples. Use neutral shades like white, silver, and varying greys (e.g., color_discrete_sequence=['#ffffff', '#cccccc', '#999999', '#666666']). Customize the Plotly figure to use template='plotly_dark' and set a transparent background if appropriate, ensuring axes labels are highly readable in white or light silver.
 - If the computed result from your Pandas query code is zero, null, or returns an empty dataframe/series, explicitly state in the answer field that no data was found for this query or requested period. Never hallucinate, assume non-zero values, or present $0 as a valid figure without confirming matching records exist in the dataset.
+- When type is "text" and you generate code to compute a result, your "answer" field MUST contain the literal placeholder "{result}" where the computed value will be dynamically plugged in. You MUST NOT guess or include any hardcoded numbers, quantities, dates, names, or values inside the "answer" string itself. Design the answer as a natural template, for example: "The product with the highest revenue last week was {result}." or "The total revenue computed was {result}."
+
 
 Response schema:
 {{

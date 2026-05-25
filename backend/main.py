@@ -405,12 +405,12 @@ async def query_data(request: Request, body: QueryRequest):
                 answer = "The data does not contain any records for the requested period."
             else:
                 # Interpolate the computed result into the answer
+                # If the LLM did not use the "{result}" placeholder, we discard the guessed text
+                # to prevent contradictions and hallucinations, presenting only the computed result.
                 if answer and "{result}" in answer:
                     answer = answer.replace("{result}", str(result))
-                elif answer:
-                    answer = f"{answer}\n\nComputed value: {result}"
                 else:
-                    answer = str(result)
+                    answer = f"Computed value: {result}"
         except CodeExecutionError:
             log_event(
                 "text_code_fallback",
