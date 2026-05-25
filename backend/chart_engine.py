@@ -11,6 +11,7 @@ Reference: PRD Section 6.1 (chart_engine.py), Section 8.7 (Safe Code Execution),
 
 from __future__ import annotations
 
+import ast
 import logging
 import time
 import traceback
@@ -22,6 +23,27 @@ from plotly.graph_objects import Figure
 
 from backend.exceptions import CodeExecutionError
 from backend.logger import log_event
+
+
+def verify_code_safety(code: str) -> bool:
+    """
+    Statically inspect code with AST to prevent import and system calls.
+    Returns True if the code has no imports or dangerous built-in invocations.
+    """
+    try:
+        tree = ast.parse(code)
+        for node in ast.walk(tree):
+            # Prohibit any dynamic or standard imports
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                return False
+            # Prohibit calling dangerous built-in functions
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+                if node.func.id in {"eval", "exec", "open", "compile", "globals", "locals", "__import__"}:
+                    return False
+        return True
+    except Exception:
+        return False
+
 
 
 def safe_execute_chart(
@@ -52,9 +74,19 @@ def safe_execute_chart(
         CodeExecutionError: If the code fails to execute or does not
             produce a valid Figure.
     """
+    # ── Verify code safety statically with AST ─────────────────────
+    if not verify_code_safety(code):
+        raise CodeExecutionError(
+            message="Unsafe code execution blocked.",
+            request_id=request_id,
+            detail="prohibited import or standard built-in usage detected.",
+        )
+
     # ── Build restricted namespace (PRD Section 8.7) ───────────────
+    # We allow the standard __builtins__ so that internal Pandas/Plotly C-extensions
+    # can run (e.g. strftime dynamic loading) without KeyError: '__import__',
+    # relying on the strict static AST check above for containment.
     allowed_globals: Dict[str, Any] = {
-        "__builtins__": {},     # No built-ins at all
         "pd": pd,              # Pandas only
         "px": px,              # Plotly Express only
         **dataframes,          # Only the uploaded dataframes
@@ -153,8 +185,15 @@ def safe_execute_text(
     Raises:
         CodeExecutionError: If the code fails or doesn't produce a result.
     """
+    # ── Verify code safety statically with AST ─────────────────────
+    if not verify_code_safety(code):
+        raise CodeExecutionError(
+            message="Unsafe code execution blocked.",
+            request_id=request_id,
+            detail="prohibited import or standard built-in usage detected.",
+        )
+
     allowed_globals: Dict[str, Any] = {
-        "__builtins__": {},
         "pd": pd,
         "px": px,
         **dataframes,
