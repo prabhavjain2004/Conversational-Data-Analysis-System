@@ -27,7 +27,7 @@ from fastapi.responses import JSONResponse
 
 from backend.config import settings
 from backend.csv_handler import process_csv_file
-from backend.exceptions import AppException
+from backend.exceptions import AppException, CodeExecutionError
 from backend.models import (
     CleaningReportSummary,
     ColumnProfile,
@@ -40,6 +40,8 @@ from backend.models import (
     UploadResponse,
 )
 from backend.relationship_detector import detect_relationships
+from backend.llm_service import build_system_prompt, build_conversation_messages, call_llm
+from backend.chart_engine import safe_execute_chart, safe_execute_text
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -384,7 +386,7 @@ async def upload_files(
 
 
 # ═══════════════════════════════════════════════════════════════════════
-#  POST /query  (PRD Section 10.2) — Stub for Phase 2
+#  POST /query  (PRD Section 10.2) — Phase 2: Full Intelligence Pipeline
 # ═══════════════════════════════════════════════════════════════════════
 
 
@@ -392,10 +394,16 @@ async def upload_files(
 async def query_data(request: Request, body: QueryRequest):
     """
     Submit a natural language question for the currently uploaded files.
-    Full implementation arrives in Phase 2 (Intelligence).
+
+    Pipeline (PRD Section 4.2):
+      Question → retrieve session → build prompt → call LLM →
+      parse JSON → execute code (if any) → return response →
+      update conversation history → log everything
     """
     request_id: str = request.state.request_id
+    start_time = time.perf_counter()
 
+    # ── Validate session exists ─────────────────────────────────────
     session = session_store.get(body.session_id)
     if session is None:
         raise AppException(
@@ -403,16 +411,106 @@ async def query_data(request: Request, body: QueryRequest):
             request_id=request_id,
         )
 
-    # Phase 2 will implement: LLM prompt construction, API call,
-    # response parsing, code execution, and chart/text routing.
-    return QueryResponse(
-        type="text",
-        answer="Query endpoint is operational. Full LLM integration "
-        "will be available in Phase 2.",
-        figure=None,
-        reasoning="Stub response — Phase 1 verifies endpoint wiring only.",
+    dataframes: Dict[str, Any] = session["dataframes"]
+    schemas: Dict[str, Any] = session["schemas"]
+    relationships = session["relationships"]
+    history: List[Dict[str, str]] = session.get("history", [])
+
+    # ── Build structured prompt (PRD Section 11) ────────────────────
+    system_prompt = build_system_prompt(schemas, dataframes, relationships)
+
+    # ── Build conversation messages ─────────────────────────────────
+    messages = build_conversation_messages(history, body.question)
+
+    # ── Call LLM with retry logic (PRD Section 17.3) ────────────────
+    llm_response = call_llm(
+        system_prompt=system_prompt,
+        messages=messages,
         request_id=request_id,
-        latency_ms=0,
+    )
+
+    response_type = llm_response.get("type", "text")
+    answer = llm_response.get("answer")
+    code = llm_response.get("code")
+    reasoning = llm_response.get("reasoning", "")
+    figure_json = None
+
+    # ── Route response based on type (PRD Section 7.2) ──────────────
+    if response_type == "chart" and code:
+        try:
+            fig = safe_execute_chart(code, dataframes, request_id)
+            figure_json = json.loads(fig.to_json())
+        except CodeExecutionError:
+            # PRD Section 17.1: Chart failure degrades gracefully
+            # Do NOT crash the session — return error message instead
+            log_event(
+                "chart_fallback",
+                request_id=request_id,
+                level=logging.WARNING,
+                reason="Chart execution failed, returning error to user",
+            )
+            response_type = "text"
+            answer = (
+                "I attempted to create a chart but the generated code "
+                "encountered an error. Please try rephrasing your question "
+                "or asking for a text-based answer instead."
+            )
+            figure_json = None
+
+    elif response_type == "text" and code:
+        # LLM generated code for a text answer — execute it
+        try:
+            result = safe_execute_text(code, dataframes, request_id)
+            # Interpolate the computed result into the answer
+            if answer and "{result}" in answer:
+                answer = answer.replace("{result}", str(result))
+            elif answer:
+                answer = f"{answer}\n\nComputed value: {result}"
+            else:
+                answer = str(result)
+        except CodeExecutionError:
+            log_event(
+                "text_code_fallback",
+                request_id=request_id,
+                level=logging.WARNING,
+                reason="Text code execution failed, returning LLM's raw answer",
+            )
+            # Fall back to whatever text the LLM provided
+            if not answer:
+                answer = (
+                    "I attempted to compute an answer but the generated code "
+                    "encountered an error. Please try rephrasing your question."
+                )
+
+    # ── Update conversation history (PRD Section 13) ────────────────
+    history.append({"role": "user", "content": body.question})
+    assistant_content = answer or f"[Chart: {reasoning}]"
+    history.append({"role": "assistant", "content": assistant_content})
+
+    # Keep only last N turns (will be enforced by deque in Phase 3,
+    # for now enforce manually)
+    max_turns = settings.conversation_window_size * 2  # 2 messages per turn
+    if len(history) > max_turns:
+        history = history[-max_turns:]
+    session["history"] = history
+
+    # ── Calculate latency and log ───────────────────────────────────
+    latency_ms = int((time.perf_counter() - start_time) * 1000)
+
+    log_event(
+        "query_complete",
+        request_id=request_id,
+        response_type=response_type,
+        total_latency_ms=latency_ms,
+    )
+
+    return QueryResponse(
+        type=response_type,
+        answer=answer,
+        figure=figure_json,
+        reasoning=reasoning,
+        request_id=request_id,
+        latency_ms=latency_ms,
     )
 
 
