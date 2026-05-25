@@ -21,6 +21,7 @@ import plotly.express as px
 from plotly.graph_objects import Figure
 
 from backend.exceptions import CodeExecutionError
+from backend.logger import log_event
 
 
 def safe_execute_chart(
@@ -51,8 +52,6 @@ def safe_execute_chart(
         CodeExecutionError: If the code fails to execute or does not
             produce a valid Figure.
     """
-    from backend.main import log_event  # Avoid circular import at module level
-
     # ── Build restricted namespace (PRD Section 8.7) ───────────────
     allowed_globals: Dict[str, Any] = {
         "__builtins__": {},     # No built-ins at all
@@ -154,8 +153,6 @@ def safe_execute_text(
     Raises:
         CodeExecutionError: If the code fails or doesn't produce a result.
     """
-    from backend.main import log_event  # Avoid circular import at module level
-
     allowed_globals: Dict[str, Any] = {
         "__builtins__": {},
         "pd": pd,

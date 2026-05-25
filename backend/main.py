@@ -42,74 +42,8 @@ from backend.models import (
 from backend.relationship_detector import detect_relationships
 from backend.llm_service import build_system_prompt, build_conversation_messages, call_llm
 from backend.chart_engine import safe_execute_chart, safe_execute_text
-
-
-# ═══════════════════════════════════════════════════════════════════════
-#  Structured JSON Logging  (PRD Section 14.3)
-# ═══════════════════════════════════════════════════════════════════════
-
-
-class JsonFormatter(logging.Formatter):
-    """
-    Custom JSON log formatter producing newline-delimited JSON entries.
-    Directly ingestible by Datadog, CloudWatch, Grafana Loki, etc.
-    """
-
-    def format(self, record: logging.LogRecord) -> str:
-        log_entry: Dict[str, Any] = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "level": record.levelname,
-            "service": "backend",
-            "event": getattr(record, "event", record.getMessage()),
-            "message": record.getMessage(),
-        }
-        # Merge any extra structured fields
-        if hasattr(record, "extra_fields"):
-            log_entry.update(record.extra_fields)
-        if record.exc_info and record.exc_info[1]:
-            log_entry["traceback"] = self.formatException(record.exc_info)
-        return json.dumps(log_entry, default=str)
-
-
-def _setup_logging() -> logging.Logger:
-    """Configure the root application logger with JSON formatting."""
-    logger = logging.getLogger("cdas")
-    logger.setLevel(getattr(logging, settings.log_level.upper(), logging.INFO))
-    logger.handlers.clear()
-
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(JsonFormatter())
-    logger.addHandler(handler)
-
-    # Prevent propagation to default handler (avoids duplicate output)
-    logger.propagate = False
-    return logger
-
-
-logger = _setup_logging()
-
-
-def log_event(
-    event: str,
-    request_id: str | None = None,
-    level: int = logging.INFO,
-    **fields: Any,
-) -> None:
-    """Emit a structured log entry with an event name and arbitrary fields."""
-    extra_fields: Dict[str, Any] = {"event": event, **fields}
-    if request_id:
-        extra_fields["request_id"] = request_id
-    record = logger.makeRecord(
-        name=logger.name,
-        level=level,
-        fn="",
-        lno=0,
-        msg=event,
-        args=(),
-        exc_info=None,
-    )
-    record.extra_fields = extra_fields  # type: ignore[attr-defined]
-    logger.handle(record)
+from backend.logger import log_event
+from backend.memory import ConversationMemory
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -126,7 +60,7 @@ class SessionStore:
       - schemas: dict mapping filename → list of ColumnProfile dicts
       - cleaning_reports: dict mapping filename → CleaningReport
       - relationships: list of DetectedRelationship dicts
-      - history: conversation history (added in Phase 3)
+      - memory: ConversationMemory (sliding window deque, PRD Section 13)
     """
 
     def __init__(self) -> None:
@@ -139,6 +73,7 @@ class SessionStore:
                 "schemas": {},
                 "cleaning_reports": {},
                 "relationships": [],
+                "memory": ConversationMemory(),
             }
         return self._sessions[session_id]
 
@@ -414,13 +349,13 @@ async def query_data(request: Request, body: QueryRequest):
     dataframes: Dict[str, Any] = session["dataframes"]
     schemas: Dict[str, Any] = session["schemas"]
     relationships = session["relationships"]
-    history: List[Dict[str, str]] = session.get("history", [])
+    memory: ConversationMemory = session["memory"]
 
     # ── Build structured prompt (PRD Section 11) ────────────────────
     system_prompt = build_system_prompt(schemas, dataframes, relationships)
 
     # ── Build conversation messages ─────────────────────────────────
-    messages = build_conversation_messages(history, body.question)
+    messages = build_conversation_messages(memory.get_history(), body.question)
 
     # ── Call LLM with retry logic (PRD Section 17.3) ────────────────
     llm_response = call_llm(
@@ -482,17 +417,9 @@ async def query_data(request: Request, body: QueryRequest):
                     "encountered an error. Please try rephrasing your question."
                 )
 
-    # ── Update conversation history (PRD Section 13) ────────────────
-    history.append({"role": "user", "content": body.question})
+    # ── Update conversation memory (PRD Section 13) ─────────────────
     assistant_content = answer or f"[Chart: {reasoning}]"
-    history.append({"role": "assistant", "content": assistant_content})
-
-    # Keep only last N turns (will be enforced by deque in Phase 3,
-    # for now enforce manually)
-    max_turns = settings.conversation_window_size * 2  # 2 messages per turn
-    if len(history) > max_turns:
-        history = history[-max_turns:]
-    session["history"] = history
+    memory.add_turn(body.question, assistant_content)
 
     # ── Calculate latency and log ───────────────────────────────────
     latency_ms = int((time.perf_counter() - start_time) * 1000)

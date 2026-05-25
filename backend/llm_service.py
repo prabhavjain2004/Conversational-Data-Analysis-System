@@ -23,6 +23,7 @@ from google.genai import types
 
 from backend.config import settings
 from backend.exceptions import LLMCallError, LLMParseError
+from backend.logger import log_event
 from backend.models import ColumnProfile, DetectedRelationship
 
 
@@ -204,8 +205,6 @@ def call_llm(
     Returns:
         Parsed dict with keys: type, answer, code, reasoning
     """
-    from backend.main import log_event  # Avoid circular import at module level
-
     client = _get_client()
     max_retries = 3
     last_error: Optional[Exception] = None
