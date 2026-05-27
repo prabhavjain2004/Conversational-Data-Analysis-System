@@ -404,13 +404,14 @@ async def query_data(request: Request, body: QueryRequest):
             if result is None or is_empty_collection or is_numeric_zero:
                 answer = "The data does not contain any records for the requested period."
             else:
-                # Interpolate the computed result into the answer
-                # If the LLM did not use the "{result}" placeholder, we discard the guessed text
-                # to prevent contradictions and hallucinations, presenting only the computed result.
-                if answer and "{result}" in answer:
-                    answer = answer.replace("{result}", str(result))
-                else:
-                    answer = f"Computed value: {result}"
+                # Synthesize a beautiful natural language answer using the Gemini LLM
+                from backend.llm_service import synthesize_final_answer
+                answer = synthesize_final_answer(
+                    question=body.question,
+                    code=code,
+                    result=result,
+                    request_id=request_id,
+                )
         except CodeExecutionError:
             log_event(
                 "text_code_fallback",
@@ -424,6 +425,35 @@ async def query_data(request: Request, body: QueryRequest):
                     "I attempted to compute an answer but the generated code "
                     "encountered an error. Please try rephrasing your question."
                 )
+
+    # ── Final Answer Sanitization Guard (prevents template leaks) ──
+    if answer and ("{result}" in answer or "{Result}" in answer):
+        log_event(
+            "template_leak_detected",
+            request_id=request_id,
+            level=logging.WARNING,
+            raw_answer=answer[:200],
+        )
+        # The LLM left a {result} placeholder — the synthesis layer must
+        # have failed or was bypassed. Re-synthesize if we have a result.
+        if response_type == "text" and code:
+            try:
+                from backend.llm_service import synthesize_final_answer, format_raw_result_for_llm
+                # Re-execute code to get the result for synthesis
+                _result = safe_execute_text(code, dataframes, request_id)
+                if _result is not None:
+                    answer = synthesize_final_answer(
+                        question=body.question,
+                        code=code,
+                        result=_result,
+                        request_id=request_id,
+                    )
+                else:
+                    answer = answer.replace("{result}", "the requested value").replace("{Result}", "the requested value")
+            except Exception:
+                answer = answer.replace("{result}", "the requested value").replace("{Result}", "the requested value")
+        else:
+            answer = answer.replace("{result}", "the requested value").replace("{Result}", "the requested value")
 
     # ── Update conversation memory (PRD Section 13) ─────────────────
     assistant_content = answer or f"[Chart: {reasoning}]"

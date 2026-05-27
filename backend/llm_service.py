@@ -65,9 +65,9 @@ Express code and set type to "chart"
 for charts, or "result" for text
 - Available dataframes in scope: {dataframe_variable_names}
 - Available libraries: pandas (as pd), plotly.express (as px)
-- For generated charts, ALWAYS apply a premium, minimalist monochrome/greyscale palette. Avoid colorful blues, greens, or purples. Use neutral shades like white, silver, and varying greys (e.g., color_discrete_sequence=['#ffffff', '#cccccc', '#999999', '#666666']). Customize the Plotly figure to use template='plotly_dark' and set a transparent background if appropriate, ensuring axes labels are highly readable in white or light silver.
+- For generated charts, ALWAYS apply a premium dark theme palette. Use template='plotly_dark' and set a transparent background (paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'). When the chart compares multiple categories or groups (e.g., Q1 vs Q4, regions, product types), you MUST use visually distinct colors per category so the user can tell them apart at a glance (e.g., color_discrete_sequence=['#e2e8f0', '#94a3b8', '#64748b', '#475569', '#334155']). Ensure axes labels are highly readable in white or light silver.
 - If the computed result from your Pandas query code is zero, null, or returns an empty dataframe/series, explicitly state in the answer field that no data was found for this query or requested period. Never hallucinate, assume non-zero values, or present $0 as a valid figure without confirming matching records exist in the dataset.
-- When type is "text" and you generate code to compute a result, your "answer" field MUST contain the literal placeholder "{{result}}" where the computed value will be dynamically plugged in. You MUST NOT guess or include any hardcoded numbers, quantities, dates, names, or values inside the "answer" string itself. Design the answer as a natural template, for example: "The product with the highest revenue last week was {{result}}." or "The total revenue computed was {{result}}."
+- When type is "text" and you generate code to compute a result, your "answer" field should contain a brief description of what the code computes (e.g., "Computing the total revenue" or "Finding the most common payment method"). Do NOT include any hardcoded numbers, specific values, or template placeholders like curly braces in the answer. The actual computed result will be formatted and presented separately.
 
 
 Response schema:
@@ -146,9 +146,10 @@ def build_system_prompt(
         parts.append("=" * 60)
         for rel in relationships:
             overlap_pct = int(rel.overlap_ratio * 100)
+            col_a = getattr(rel, "join_column_a", None) or rel.join_column
+            col_b = getattr(rel, "join_column_b", None) or rel.join_column
             parts.append(
-                f"- {rel.file_a}.{rel.join_column} → "
-                f"{rel.file_b}.{rel.join_column} (overlap: {overlap_pct}%)"
+                f"- {rel.file_a}.{col_a} → {rel.file_b}.{col_b} (overlap: {overlap_pct}%)"
             )
 
     return "\n".join(parts)
@@ -396,3 +397,124 @@ def _parse_llm_response(
     parsed.setdefault("code", None)
 
     return parsed
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  LLM Answer Synthesis
+# ═══════════════════════════════════════════════════════════════════════
+
+
+def format_raw_result_for_llm(result: Any) -> str:
+    """
+    Format the raw computed python result into a clean string representation
+    for the LLM synthesis prompt, handling dataframes, series, lists, and dicts.
+    """
+    import pandas as pd
+    
+    if isinstance(result, pd.DataFrame):
+        try:
+            return result.to_markdown()
+        except (ImportError, Exception):
+            return result.to_string()
+    elif isinstance(result, pd.Series):
+        try:
+            return result.to_markdown()
+        except (ImportError, Exception):
+            return result.to_string()
+    elif isinstance(result, list):
+        # Strips out internal type wrappers like np.float64, np.int64 for clean printing
+        cleaned_list = []
+        for x in result:
+            if hasattr(x, "item"):  # Convert numpy scalars to python native scalars
+                cleaned_list.append(x.item())
+            else:
+                cleaned_list.append(x)
+        return str(cleaned_list)
+    elif isinstance(result, dict):
+        return json.dumps(result, default=str)
+    else:
+        # Check if it is a numpy scalar
+        if hasattr(result, "item"):
+            return str(result.item())
+        return str(result)
+
+
+def synthesize_final_answer(
+    question: str,
+    code: str,
+    result: Any,
+    request_id: str,
+) -> str:
+    """
+    Call the Gemini API to synthesize a polished, natural, and concise ChatGPT-style
+    response to the user's question, given the raw computed result.
+    """
+    client = _get_client()
+    formatted_result = format_raw_result_for_llm(result)
+
+    system_prompt = (
+        "You are an expert conversational data analysis assistant. Your job is to "
+        "synthesize a polished, direct, and extremely clear natural language answer (like ChatGPT) "
+        "to a user's question, given the Python code executed on the data and the raw computed result. "
+        "Keep your response concise (usually 1 to 2 sentences), clear, and professional.\n\n"
+        "Follow these rules:\n"
+        "- Do not include meta-commentary, such as 'The executed Python code computed...' or 'Based on the result...'. Just answer the question directly and professionally.\n"
+        "- Format numbers beautifully. Use commas for thousands (e.g., 10,700), format currency values (e.g., $10,723,845.52 or $10.72M) where appropriate, and round decimals/floats to 2 decimal places (e.g., 3.01 instead of 3.006266666666667).\n"
+        "- If the result is a list or comparison, address all elements/categories clearly (e.g., 'Weekend sales were 10,700 orders compared to 4,300 on weekdays.').\n"
+        "- Ensure any units (e.g., 'days', 'orders', 'USD', 'revenue') are included if they can be inferred from the question or code.\n"
+        "- If the result represents empty data, state clearly that no records or data were found for that query."
+    )
+
+    contents = [
+        types.Content(
+            role="user",
+            parts=[
+                types.Part(
+                    text=f"User's Question: {question}\n\n"
+                         f"Executed Code:\n```python\n{code}\n```\n\n"
+                         f"Raw Computed Result:\n{formatted_result}"
+                )
+            ]
+        )
+    ]
+
+    try:
+        start_time = time.perf_counter()
+        log_event(
+            "llm_synthesis_request",
+            request_id=request_id,
+            model=settings.llm_model,
+        )
+
+        response = client.models.generate_content(
+            model=settings.llm_model,
+            contents=contents,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                temperature=0.2,
+            ),
+        )
+
+        latency_ms = int((time.perf_counter() - start_time) * 1000)
+        answer = response.text.strip() if response.text else None
+
+        log_event(
+            "llm_synthesis_complete",
+            request_id=request_id,
+            latency_ms=latency_ms,
+        )
+
+        if answer:
+            return answer
+
+    except Exception as e:
+        log_event(
+            "llm_synthesis_failure",
+            request_id=request_id,
+            level=logging.ERROR,
+            error=str(e),
+        )
+
+    # Fallback to a basic string representation if LLM call fails
+    return f"Computed value: {formatted_result}"
+

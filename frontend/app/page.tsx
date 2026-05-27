@@ -44,6 +44,36 @@ interface ChatMessage {
   latency_ms?: number;
 }
 
+const ANALYZING_MESSAGES = [
+  "Analyzing your data…",
+  "Querying across datasets…",
+  "Running computations…",
+  "Cross-referencing files…",
+  "Synthesizing results…",
+];
+
+function AnalyzingMessage() {
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setIndex((prev) => (prev + 1) % ANALYZING_MESSAGES.length);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <span style={{ 
+      fontSize: "0.8rem", 
+      color: "rgba(255,255,255,0.55)", 
+      fontWeight: 500,
+      transition: "opacity 0.3s ease",
+    }}>
+      {ANALYZING_MESSAGES[index]}
+    </span>
+  );
+}
+
 export default function Dashboard() {
   const [sessionId, setSessionId] = useState<string>("");
   const [files, setFiles] = useState<FileProcessed[]>([]);
@@ -491,14 +521,21 @@ export default function Dashboard() {
 
             {/* Thinking Indicator */}
             {isQuerying && (
-              <div className="chat-bubble assistant pulse">
-                <div style={{ display: "flex", gap: "0.3rem", alignItems: "center" }}>
-                  <div style={{ width: "6px", height: "6px", background: "#737373", borderRadius: "50%" }}/>
-                  <div style={{ width: "6px", height: "6px", background: "#a3a3a3", borderRadius: "50%" }}/>
-                  <div style={{ width: "6px", height: "6px", background: "#d4d4d4", borderRadius: "50%" }}/>
-                  <span style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.5)", marginLeft: "0.25rem" }}>
-                    Analyzing data...
-                  </span>
+              <div className="chat-bubble assistant" style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                <div style={{ 
+                  fontSize: "0.68rem", 
+                  textTransform: "uppercase", 
+                  letterSpacing: "0.06em", 
+                  color: "rgba(255, 255, 255, 0.6)", 
+                  fontWeight: 700 
+                }}>
+                  CDAS Assistant
+                </div>
+                <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
+                  <div className="thinking-dots">
+                    <span></span><span></span><span></span>
+                  </div>
+                  <AnalyzingMessage />
                 </div>
               </div>
             )}

@@ -101,6 +101,8 @@ class DetectedRelationship(BaseModel):
     file_b: str
     join_column: str
     overlap_ratio: float = Field(..., ge=0.0, le=1.0)
+    join_column_a: Optional[str] = None
+    join_column_b: Optional[str] = None
 
 
 # ═══════════════════════════════════════════════════════════════════════
