@@ -142,8 +142,8 @@ Question received\
 → Structured prompt constructed\
 → LLM called with full context\
 → LLM returns structured JSON (type: text or chart)\
-→ If chart: generated code executed in sandbox → Plotly figure returned\
-→ If text: markdown answer returned\
+→ If chart: generated Plotly Express code executed in sandbox → Plotly figure returned\
+→ If text: generated Pandas code executed in sandbox → LLM-powered Response Synthesis Layer transforms raw result into natural, polished conversational language → Final Sanitization Guard filters any leaked placeholders or numpy types → Clean response returned\
 → Response sent to frontend\
 → Conversation history updated\
 → All events logged with request_id
@@ -225,23 +225,21 @@ for querying:
 
 #### *relationship_detector.py - *Automatic Foreign Key Detection
 
--   Compares column names across all uploaded files
--   For each matching column name pair, computes value overlap ratio
--   Pairs with overlap above a configurable threshold (default: 50%) are
-    recorded as detected relationships
--   Detected relationships are passed to the LLM prompt so it knows how
-    to join files
--   No relationships are hardcoded, the system works with any set of
-    uploaded files
+-   Implements a hybrid **LLM-Assisted Semantic Relationship Detector** to propose relationships between files.
+-   Proposes candidates based on logical column semantics (e.g., mapping `id` in `users.csv` to `user_id` in `orders.csv`), even if names do not match.
+-   Filters out boolean status flags, binary columns, or indicator columns (e.g., `is_active`, `has_discount`) automatically to prevent false positives.
+-   Calculates the unique value overlap ratio (Jaccard Index) for proposed column pairs; pairs exceeding the configured threshold (default: 50%) are recorded as detected.
+-   Supports compound column models with non-identical join columns (`join_column_a` and `join_column_b`).
+-   No relationships are hardcoded; the system is completely dynamic.
 
 #### *llm_service.py - *LLM Integration Layer
 
--   Constructs the structured system prompt (schema context +
-    relationships + conversation history + user question)
--   Calls the Gemini API
--   Parses and validates the JSON response
--   Handles retries on transient failures
--   Logs token counts and latency
+-   Constructs the structured system prompt (schema context + relationships + conversation history + user question).
+-   Calls the Gemini API using native client libraries.
+-   Parses and validates the structured JSON response according to strict Pydantic schemas.
+-   **Response Synthesis Layer**: Houses the LLM-powered answer generator that interpolates executed sandbox computation results back into beautiful, ChatGPT/Gemini-style natural language explanations.
+-   Handles retries on transient failures.
+-   Logs token counts and latency.
 
 #### *chart_engine.py - *Safe Code Execution Sandbox
 
@@ -421,17 +419,11 @@ computation correctly using Pandas, and the system executes that code
 against the actual data. The result is always computed from real data,
 never invented by the model.
 
-**For text answers:** The LLM generates Pandas code that computes a
-value, the system executes it, and the result is interpolated back into
-a natural language response.
+**For text answers:** The LLM generates Pandas code that computes a value, the system executes it in a secure sandbox, and the raw computed result is passed to a specialized **Gemini-powered Response Synthesis Layer**. This layer uses the LLM to write a polished, natural-language conversational response based on the question and computed result. Finally, a strict **Sanitization Guard** inspects the response to ensure no literal `{result}` placeholders, raw numpy types, or formatting templates are leaked to the client.
 
-**For charts:** The LLM generates Plotly Express code, the system
-executes it in a sandbox, and the resulting figure is sent to the
-frontend.
+**For charts:** The LLM generates Plotly Express code, the system executes it in a sandbox, and the resulting figure is sent to the frontend.
 
-**This means the LLM\'s role is reasoning and code authoring, not
-arithmetic.** The data never lies because the code runs against the
-actual uploaded files.
+**This means the LLM\'s role is reasoning and code authoring, not arithmetic.** The data never lies because the code runs against the actual uploaded files.
 
 ### 8.3 Structured JSON Response Contract
 
@@ -469,19 +461,13 @@ system generalizable to any set of CSV files a user uploads.
 
 **How it works:**
 
-1.  For every pair of files, find columns that share the same name
-2.  For each matching column, compute the ratio of overlapping values
-    between the two files
-3.  If the overlap ratio exceeds the configured threshold (default 50%),
-    record it as a detected relationship
-4.  Pass all detected relationships to the LLM in structured form so it
-    knows which files can be joined and on which column
+1.  **LLM Semantic Proposal:** During the file upload phase, schemas and statistics of all dataframes are sent to the LLM. The LLM identifies candidate logical relationships based on column semantics and metadata, allowing it to detect key-foreign key pairs even when names are completely different (e.g. matching `id` in `users.csv` to `user_id` in `orders.csv`).
+2.  **Strict Boolean/Flag Filtering:** The system automatically filters out candidate columns that represent boolean status indicators, binary flags, or categorical attributes with low cardinality (e.g., `is_active`, `has_discount`) to prevent false-positive relationships.
+3.  **Jaccard Data Overlap Check:** For each semantic candidate pair proposed by the LLM, the system validates the actual data overlap ratio (Jaccard Index) of unique values.
+4.  **Verification:** If the overlap ratio exceeds the configured threshold (default: 50%), the relationship is confirmed and recorded.
+5.  **Multi-Key Schema:** The model maps `join_column_a` and `join_column_b` independently to accommodate different column names.
 
-**Tradeoff:** Heuristic detection can produce false positives (columns
-that share a name but are not actually related). The configurable
-threshold and the LLM\'s reasoning capability mitigate this, if a
-detected relationship does not make semantic sense, the LLM will ignore
-it.
+**Tradeoff:** Purely heuristic string matching misses mismatched column names and produces massive false positives on status indicators. The hybrid semantic-and-overlap verification strategy perfectly balances discovery breadth with strict correctness, and passes precise join contexts directly to the analysis engine.
 
 ### 8.5 Direct LLM API Calls vs LangChain
 
@@ -734,6 +720,10 @@ Express code and set type to \"chart\"\
 for charts, or \"result\" for text\
 - Available dataframes in scope: {dataframe_variable_names}\
 - Available libraries: pandas (as pd), plotly.express (as px)\
+- For generated charts, ALWAYS apply a premium dark theme palette. Use template='plotly_dark' and set a transparent background (paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'). When the chart compares multiple categories or groups (e.g., Q1 vs Q4, regions, product types), you MUST use visually distinct colors per category so the user can tell them apart at a glance (e.g., color_discrete_sequence=['#e2e8f0', '#94a3b8', '#64748b', '#475569', '#334155']). Ensure axes labels are highly readable in white or light silver.\
+- If the computed result from your Pandas query code is zero, null, or returns an empty dataframe/series, explicitly state in the answer field that no data was found for this query or requested period. Never hallucinate, assume non-zero values, or present $0 as a valid figure without confirming matching records exist in the dataset.\
+- When type is "text" and you generate code to compute a result, your "answer" field should contain a brief description of what the code computes (e.g., "Computing the total revenue" or "Finding the most common payment method"). Do NOT include any hardcoded numbers, specific values, or template placeholders like curly braces in the answer. The actual computed result will be formatted and presented separately.\
+- IMPORTANT — Limited conversation memory: You only have access to the last few turns of conversation. You do NOT have access to the full conversation history. Never claim to know what the user's "first question" was, or make any statement about conversation history beyond what is visible to you. If asked about earlier parts of the conversation, say: "I only have access to the recent conversation history and cannot recall earlier questions."\
 \
 Response schema:\
 {\
