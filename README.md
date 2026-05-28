@@ -293,3 +293,10 @@ Clears session context, deletes dataframes, and resets conversation memory histo
   "cleared": true
 }
 ```
+
+---
+
+## 📄 7. License
+
+This project is open-source and licensed under the [MIT License](LICENSE).
+
